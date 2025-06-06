@@ -1,0 +1,274 @@
+# ===================================================================
+# CÓDIGO PARA EXTRAIR TRANSCRIÇÕES DO YOUTUBE AUTOMATICAMENTE
+# Para usar no Google Colab (colab.research.google.com)
+# ===================================================================
+
+# PASSO 1: INSTALAR BIBLIOTECAS NECESSÁRIAS
+# Execute esta célula primeiro (aperte Shift + Enter)
+!pip install youtube-transcript-api
+!pip install pandas
+!pip install openpyxl
+
+# ===================================================================
+# PASSO 2: IMPORTAR BIBLIOTECAS E CONFIGURAR
+# ===================================================================
+import pandas as pd
+from youtube_transcript_api import YouTubeTranscriptApi
+import re
+from datetime import datetime
+import os
+
+print("✅ Bibliotecas carregadas com sucesso!")
+print("Agora você pode extrair transcrições do YouTube automaticamente")
+
+# ===================================================================
+# PASSO 3: FUNÇÃO PARA EXTRAIR ID DO VÍDEO DO YOUTUBE
+# ===================================================================
+def extrair_id_video(url):
+    """
+    Extrai o ID do vídeo a partir de uma URL do YouTube
+    Funciona com vários formatos de URL
+    """
+    padroes = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})',
+        r'embed\/([0-9A-Za-z_-]{11})'
+    ]
+    for padrao in padroes:
+        match = re.search(padrao, url)
+        if match:
+            return match.group(1)
+    return None
+
+# ===================================================================
+# PASSO 4: FUNÇÃO PRINCIPAL PARA EXTRAIR TRANSCRIÇÃO
+# ===================================================================
+def extrair_transcricao_youtube(url_video, idioma='pt'):
+    """
+    Extrai a transcrição de um vídeo do YouTube
+
+    Parâmetros:
+    - url_video: Link completo do vídeo do YouTube
+    - idioma: 'pt' para português, 'en' para inglês
+
+    Retorna:
+    Texto completo da transcrição
+    """
+    try:
+        # Extrair ID do vídeo
+        video_id = extrair_id_video(url_video)
+        if not video_id:
+            return "❌ Erro: URL inválida"
+
+        # Tentar obter transcrição em múltiplos idiomas
+        idiomas_tentar = ['pt', 'pt-BR', 'en'] if idioma == 'pt' else ['en', 'pt', 'pt-BR']
+        transcript = None
+        idioma_usado = None
+        for lang in idiomas_tentar:
+            try:
+                transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                idioma_usado = lang
+                break
+            except:
+                continue
+
+        if transcript is None:
+            # Tentar listar idiomas disponíveis
+            try:
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                idiomas_disponiveis = []
+                for t in transcript_list:
+                    idiomas_disponiveis.append(t.language_code)
+                return f"❌ Erro: Nenhuma transcrição encontrada nos idiomas tentados.\nIdiomas disponíveis: {', '.join(idiomas_disponiveis)}"
+            except:
+                return "❌ Erro: Não foi possível obter transcrição para este vídeo"
+
+
+        # Juntar todo o texto
+        texto_completo = " ".join([item['text'] for item in transcript])
+
+        # Limpar texto (remover quebras de linha desnecessárias)
+        texto_limpo = re.sub(r'\s+', ' ', texto_completo).strip()
+
+        print(f"✅ Transcrição extraída com sucesso!")
+        print(f" 🌐 Idioma usado: {idioma_usado}")
+        print(f" 📊 Caracteres: {len(texto_limpo)}")
+        print(f" 📊 Palavras: {len(texto_limpo.split())}")
+
+        return texto_limpo
+
+    except Exception as e:
+        error_msg = f"❌ Erro ao extrair transcrição: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+
+# ===================================================================
+# PASSO 5: FUNÇÃO PARA PROCESSAR MÚLTIPLOS VÍDEOS
+# ===================================================================
+def processar_lista_videos(lista_urls, nomes_videos=None):
+    """
+    Processa uma lista de URLs e extrai todas as transcrições
+
+    Parâmetros:
+    - lista_urls: Lista com URLs dos vídeos
+    - nomes_videos: Lista com nomes descritivos (opcional)
+
+    Retorna:
+    DataFrame com os resultados
+    """
+    resultados = []
+    if nomes_videos is None:
+        nomes_videos = [f"Vídeo {i+1}" for i in range(len(lista_urls))]
+
+    print(f"🚀 Iniciando processamento de {len(lista_urls)} vídeos...")
+    print("=" * 60)
+
+    for i, (url, nome) in enumerate(zip(lista_urls, nomes_videos)):
+        print(f"\n📹 Processando {i+1}/{len(lista_urls)}: {nome}")
+        print(f"🔗 URL: {url}")
+        transcricao = extrair_transcricao_youtube(url)
+
+        # Adicionar aos resultados
+        resultado = {
+            'NOME_VIDEO': nome,
+            'URL': url,
+            'TRANSCRICAO': transcricao,
+            'DATA_EXTRACAO': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'STATUS': '✅ Sucesso' if not transcricao.startswith('❌') else '❌ Erro'
+        }
+        resultados.append(resultado)
+
+    # Criar DataFrame
+    df = pd.DataFrame(resultados)
+
+    print("\n" + "=" * 60)
+    print(f"🎉 Processamento concluído!")
+    print(f"✅ Sucessos: {len(df[df['STATUS'] == '✅ Sucesso'])}")
+    print(f"❌ Erros: {len(df[df['STATUS'] == '❌ Erro'])}")
+
+    return df
+
+# ===================================================================
+# PASSO 6: FUNÇÃO PARA SALVAR EM EXCEL
+# ===================================================================
+def salvar_em_excel(dataframe, nome_arquivo='transcricoes_youtube.xlsx'):
+    """
+    Salva o DataFrame em um arquivo Excel
+    """
+    try:
+        dataframe.to_excel(nome_arquivo, index=False, engine='openpyxl')
+        print(f"💾 Arquivo salvo como: {nome_arquivo}")
+        print(f"📁 Para baixar: clique em 'Arquivos' (pasta) no menu lateral esquerdo")
+        return True
+    except Exception as e:
+        print(f"❌ Erro ao salvar: {e}")
+        return False
+
+
+# ===================================================================
+# EXEMPLO DE USO - COLE SEUS VÍDEOS AQUI!
+# ===================================================================
+
+# CONFIGURAÇÃO: ADICIONE SEUS VÍDEOS AQUI
+videos_para_processar = [
+    "https://www.youtube.com/watch?v=EXEMPLO1", # Substitua pelos seus links
+    "https://www.youtube.com/watch?v=EXEMPLO2", # Substitua pelos seus links
+    # Adicione quantos quiser...
+]
+
+# NOMES DESCRITIVOS (opcional)
+nomes_dos_videos = [
+    "Rossandro Klinjey - Burnout Materno", # Mude para os nomes reais
+    "Mãe Cristã - Lidando com Culpa",     # Mude para os nomes reais
+    # Adicione os nomes correspondentes...
+]
+
+
+# ===================================================================
+# EXECUTAR O PROCESSAMENTO
+# ===================================================================
+def executar_extracao():
+    """
+    Função principal para executar todo o processo
+    """
+    print("🎬 EXTRATOR AUTOMÁTICO DE TRANSCRIÇÕES YOUTUBE")
+    print("=" * 60)
+
+    # Verificar se há vídeos configurados
+    if not videos_para_processar or videos_para_processar[0] == "https://www.youtube.com/watch?v=EXEMPLO1":
+        print("⚠️ ATENÇÃO: Configure seus vídeos primeiro!")
+        print(" Edite a lista 'videos_para_processar' com os links reais")
+        return
+
+    # Processar vídeos
+    df_resultados = processar_lista_videos(videos_para_processar, nomes_dos_videos)
+
+    # Mostrar preview dos resultados
+    print("\n📋 PREVIEW DOS RESULTADOS:")
+    print("=" * 60)
+    for index, row in df_resultados.iterrows():
+        print(f"🎥 {row['NOME_VIDEO']}")
+        print(f" Status: {row['STATUS']}")
+        if row['STATUS'] == '✅ Sucesso':
+            preview = row['TRANSCRICAO'][:200] + "..." if len(row['TRANSCRICAO']) > 200 else row['TRANSCRICAO']
+            print(f" Preview: {preview}")
+        print()
+
+    # Salvar em Excel
+    print("💾 Salvando resultados...")
+    salvar_em_excel(df_resultados)
+
+    return df_resultados
+
+
+# ===================================================================
+# FUNÇÃO DE TESTE RÁPIDO (para testar com 1 vídeo)
+# ===================================================================
+def testar_um_video(url, nome="Teste"):
+    """
+    Função para testar rapidamente com apenas um vídeo
+    """
+    print(f"🧪 TESTE RÁPIDO - {nome}")
+    print("=" * 40)
+
+    transcricao = extrair_transcricao_youtube(url)
+
+    if not transcricao.startswith('❌'):
+        print(f"\n📝 PREVIEW DA TRANSCRIÇÃO:")
+        print("-" * 40)
+        preview = transcricao[:500] + "..." if len(transcricao) > 500 else transcricao
+        print(preview)
+
+        # Salvar teste
+        df_teste = pd.DataFrame([{
+            'NOME_VIDEO': nome,
+            'URL': url,
+            'TRANSCRICAO': transcricao,
+            'DATA_EXTRACAO': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'STATUS': '✅ Sucesso'
+        }])
+        salvar_em_excel(df_teste, f'teste_{nome.lower().replace(" ", "_")}.xlsx')
+
+    return transcricao
+
+print("\n🎉 CÓDIGO PRONTO! COMO USAR:")
+print("=" * 50)
+print("1️⃣ Para TESTE RÁPIDO (1 vídeo):")
+print(" testar_um_video('SEU_LINK_AQUI', 'Nome do Vídeo')")
+print("\n2️⃣ Para PROCESSAR VÁRIOS:")
+print(" 1. Edite a lista 'videos_para_processar'")
+print(" 2. Execute: executar_extracao()")
+print("\n3️⃣ BAIXAR ARQUIVO:")
+print(" Clique na pasta 📁 no menu lateral esquerdo")
+print("=" * 50)
+
+# ===================================================================
+# EXEMPLO DE EXECUÇÃO (descomente as linhas abaixo para testar)
+# ===================================================================
+
+# TESTE RÁPIDO:
+# resultado = testar_um_video("https://www.youtube.com/watch?v=SEU_LINK", "Teste Rápido")
+
+# PROCESSAMENTO COMPLETO:
+# df_final = executar_extracao()
