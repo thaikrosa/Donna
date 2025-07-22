@@ -10,3 +10,34 @@ return usuarios.map(user => ({ json: user }));
 
 //Data atual
 {{ new Date().toISOString().slice(0,10) }}
+
+
+// Recebendo os dados de múltiplos inputs
+const clima = $input.all()[0].json;       // ex: de Code2
+const lembretes = $input.all()[1].json;   // ex: de Code3
+const emocional = $input.all()[2].json;   // ex: de emocional
+const eventos = $input.all()[3].json;     // ex: de eventos
+const dadosGerais = $input.all()[4].json; // ex: de Set GERAL
+
+// Montando objeto final
+const dadosCompletos = {
+  nome_mae: dadosGerais.nome_mae || null,
+  id_user: dadosGerais.id_user || null,
+  preferencias: dadosGerais.preferencias || [],
+  
+  clima_atual: clima.clima_atual || null,
+  temperatura_atual: clima.temperatura_atual || null,
+  previsao_manha: clima.previsao_manha || null,
+  resumo_dia: clima.resumo_dia || null,
+
+  lembretes_dia: lembretes.lembretes_dia || [],
+  status_emocional_ontem: emocional.status_emocional || null,
+  eventos_agenda: eventos.eventos_agenda || [],
+};
+
+// Retornando em formato de item
+return [
+  {
+    json: dadosCompletos
+  }
+];
