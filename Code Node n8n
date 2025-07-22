@@ -1,0 +1,9 @@
+// Filtrar apenas os campos necessários
+const usuarios = $input.all().map(item => ({
+  id_user: item.json.id_user,
+  nome: item.json.nome, 
+  cidade: item.json.cidade,
+  preferencias: item.json.preferencias
+}));
+
+return usuarios.map(user => ({ json: user }));
