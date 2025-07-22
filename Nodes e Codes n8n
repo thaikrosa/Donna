@@ -7,3 +7,6 @@ const usuarios = $input.all().map(item => ({
 }));
 
 return usuarios.map(user => ({ json: user }));
+
+//Data atual
+{{ new Date().toISOString().slice(0,10) }}
